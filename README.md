@@ -1,14 +1,15 @@
 # Casper Via CTA-E07-14A için mainline Linux
 
+<img width="1600" height="1073" alt="WhatsApp Image 2026-09-30 at 21 08 47" src="https://github.com/user-attachments/assets/930b758a-99a5-4dcd-bb1c-9d65405b281f" />
+
+
 2014 yapımı **Casper Via CTA-E07-14A** tabletine (Amlogic AML8726-MX / Meson6, Android 4.1.1)
 güncel mainline Linux (7.2) ve SD kart üzerinde **Alpine Linux** ile dokunmatik bir masaüstü
 (labwc) kurar. Stok Android NAND'de olduğu gibi kalır; mainline kernel yalnızca **recovery**
 bölümüne yazılır ve **Vol+ ile açılışta** başlar.
 
 > ⚠️ **Uyarı:** Bu proje resmi değildir ve Casper ile bağlantısı yoktur. Tabletin NAND'ine
-> yazar, stok recovery'yi siler ve root erişimi açar. Cihazı kullanılamaz hale getirebilir,
-> garantiyi geçersiz kılar. Her adımı anlayarak ve **yedek alarak** uygulayın; sorumluluk
-> sizdedir.
+> yazar, stok recovery'yi siler ve root erişimi açar. Cihazı kullanılamaz hale getirebilir.
 
 ## Durum
 
