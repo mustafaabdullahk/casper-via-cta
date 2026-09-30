@@ -1,10 +1,51 @@
 {
-  "layer": "top", "position": "top", "height": 30,
-  "modules-left": ["wlr/taskbar"],
-  "modules-right": ["backlight", "network", "battery", "clock"],
-  "wlr/taskbar": { "icon-size": 22, "icon-theme": "Papirus", "on-click": "activate", "on-click-middle": "close", "tooltip": false },
-  "backlight": { "device": "c1108768.backlight", "format": "☀ {percent}%", "on-scroll-up": "/usr/local/bin/casper-bright up", "on-scroll-down": "/usr/local/bin/casper-bright down", "on-click": "/usr/local/bin/casper-bright up", "on-click-right": "/usr/local/bin/casper-bright down" },
-  "network": { "interface": "wlan0", "format-wifi": "📶 {essid}", "format-disconnected": "📶 --", "tooltip-format": "{ipaddr}" },
-  "battery": { "bat": "axp20x-battery", "format": "🔋 {capacity}%", "interval": 30 },
-  "clock": { "format": "{:%H:%M}", "tooltip-format": "{:%d.%m.%Y}" }
+  "layer": "top",
+  "position": "top",
+  "height": 30,
+  "modules-left": [
+    "wlr/taskbar"
+  ],
+  "modules-right": [
+    "backlight",
+    "network",
+    "battery",
+    "clock"
+  ],
+  "wlr/taskbar": {
+    "icon-size": 22,
+    "icon-theme": "Papirus",
+    "on-click": "activate",
+    "on-click-middle": "close",
+    "tooltip": false
+  },
+  "backlight": {
+    "device": "c1108768.backlight",
+    "format": "  {percent}%",
+    "on-scroll-up": "/usr/local/bin/casper-bright up",
+    "on-scroll-down": "/usr/local/bin/casper-bright down",
+    "on-click": "/usr/local/bin/casper-bright up",
+    "on-click-right": "/usr/local/bin/casper-bright down"
+  },
+  "network": {
+    "interface": "wlan0",
+    "format-wifi": "  {essid}",
+    "format-disconnected": "  --",
+    "tooltip-format": "{ipaddr}"
+  },
+  "battery": {
+    "bat": "axp20x-battery",
+    "interval": 30,
+    "format": "{icon}  {capacity}%",
+    "format-icons": [
+      "",
+      "",
+      "",
+      "",
+      ""
+    ]
+  },
+  "clock": {
+    "format": "{:%H:%M}",
+    "tooltip-format": "{:%d.%m.%Y}"
+  }
 }

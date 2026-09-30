@@ -1,4 +1,4 @@
-* { font-family: "DejaVu Sans"; font-size: 14px; min-height: 0; }
+* { font-family: "DejaVu Sans", "Font Awesome 7 Free Solid"; font-size: 14px; min-height: 0; }
 window#waybar { background: rgba(27,35,48,0.92); color: #e8ecf2; }
 #backlight, #network, #battery, #clock { padding: 0 12px; }
 #taskbar button { padding: 0 6px; color: #e8ecf2; }
