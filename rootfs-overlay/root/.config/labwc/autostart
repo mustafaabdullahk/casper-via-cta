@@ -1,4 +1,3 @@
-# panel and dock respawn while labwc runs (the loops end with the session)
+# panel (launchers + keyboard toggle) respawns while labwc runs (the loops end with the session)
 ( while pgrep -x labwc >/dev/null; do waybar >>/var/log/waybar.log 2>&1; sleep 2; done ) &
-( while pgrep -x labwc >/dev/null; do lavalauncher >>/var/log/lavalauncher.log 2>&1; sleep 2; done ) &
 wvkbd-mobintl --hidden -L 190 --fn "DejaVu Sans 16" >/var/log/wvkbd.log 2>&1 &

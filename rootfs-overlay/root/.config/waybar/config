@@ -1,8 +1,14 @@
 {
   "layer": "top",
   "position": "top",
-  "height": 30,
+  "height": 40,
   "modules-left": [
+    "custom/menu",
+    "custom/term",
+    "custom/web",
+    "custom/edit",
+    "custom/files",
+    "custom/kbd",
     "wlr/taskbar"
   ],
   "modules-right": [
@@ -47,5 +53,41 @@
   "clock": {
     "format": "{:%H:%M}",
     "tooltip-format": "{:%d.%m.%Y}"
+  },
+  "custom/menu": {
+    "format": "",
+    "on-click": "fuzzel",
+    "tooltip-format": "Uygulamalar",
+    "tooltip": false
+  },
+  "custom/term": {
+    "format": "",
+    "on-click": "foot",
+    "tooltip-format": "Terminal",
+    "tooltip": false
+  },
+  "custom/web": {
+    "format": "",
+    "on-click": "netsurf",
+    "tooltip-format": "Web",
+    "tooltip": false
+  },
+  "custom/edit": {
+    "format": "",
+    "on-click": "mousepad",
+    "tooltip-format": "Editor",
+    "tooltip": false
+  },
+  "custom/files": {
+    "format": "",
+    "on-click": "pcmanfm",
+    "tooltip-format": "Dosyalar",
+    "tooltip": false
+  },
+  "custom/kbd": {
+    "format": "",
+    "on-click": "/usr/local/bin/casper-kbd",
+    "tooltip-format": "Klavye",
+    "tooltip": false
   }
 }

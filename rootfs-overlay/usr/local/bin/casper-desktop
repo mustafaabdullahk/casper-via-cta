@@ -1,6 +1,6 @@
 #!/bin/sh
 # Touch desktop for the Casper Via: udev (libinput) + seatd + labwc (pixman, no GPU),
-# with waybar, lavalauncher and wvkbd from ~/.config/labwc/autostart.
+# with waybar (launchers, keyboard toggle) and wvkbd from ~/.config/labwc/autostart.
 # /init starts us with PATH=/bin only
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export XDG_RUNTIME_DIR=/run/xdg HOME=/root

@@ -102,8 +102,9 @@ Kartı tablete takın, tableti kapatın, **Vol+ basılı tutarken güç tuşuna*
 arşiv açılır (birkaç dakika). Ardından Wi-Fi, SSH (`ssh root@<ip>`, IP ekranda yazar), TLP ve
 masaüstü kendiliğinden başlar.
 
-- Sol dock: uygulamalar, terminal, NetSurf, Mousepad, dosyalar, ekran klavyesi
-- Üst panel: pencereler, parlaklık, Wi-Fi, pil, saat
+- Üst panel, soldan: uygulama menüsü, terminal, NetSurf, Mousepad, dosyalar,
+  **ekran klavyesi aç/kapa**, açık pencereler
+- Üst panel, sağda: parlaklık (dokun: artır, sağ tık: azalt), Wi-Fi, pil, saat
 
 **Android'e dönüş:** tableti normal açın; `boot` bölümüne dokunulmaz.
 

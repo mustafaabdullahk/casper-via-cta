@@ -3,3 +3,7 @@ window#waybar { background: rgba(27,35,48,0.92); color: #e8ecf2; }
 #backlight, #network, #battery, #clock { padding: 0 12px; }
 #taskbar button { padding: 0 6px; color: #e8ecf2; }
 #taskbar button.active { background: rgba(255,255,255,0.15); }
+/* launcher buttons: big touch targets */
+#custom-menu, #custom-term, #custom-web, #custom-edit, #custom-files, #custom-kbd {
+  font-size: 20px; padding: 0 14px; }
+#custom-kbd { background: rgba(61,111,168,0.55); }

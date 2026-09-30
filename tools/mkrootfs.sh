@@ -10,7 +10,7 @@ cd "$(dirname "$0")/alpine" 2>/dev/null || { mkdir -p "$(dirname "$0")/alpine"; 
 REL=v3.24
 B=https://dl-cdn.alpinelinux.org/alpine/$REL
 PKGS="font-awesome alpine-base iw wpa_supplicant wireless-regdb dropbear tlp i2c-tools htop
-      eudev seatd dbus labwc wvkbd foot waybar lavalauncher fuzzel
+      eudev seatd dbus labwc wvkbd foot waybar fuzzel
       netsurf mousepad pcmanfm adwaita-icon-theme papirus-icon-theme font-dejavu xkeyboard-config"
 
 if [ ! -x sbin/apk.static ]; then
