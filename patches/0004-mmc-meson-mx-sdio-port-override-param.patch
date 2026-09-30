@@ -1,0 +1,26 @@
+diff --git a/drivers/mmc/host/meson-mx-sdio.c b/drivers/mmc/host/meson-mx-sdio.c
+index 5921e2cb2..b07f0a7df 100644
+--- a/drivers/mmc/host/meson-mx-sdio.c
++++ b/drivers/mmc/host/meson-mx-sdio.c
+@@ -104,6 +104,10 @@ struct meson_mx_mmc_host_clkc {
+ 	struct clk_fixed_factor		fixed_div2;
+ };
+ 
++static int port_override = -1;
++module_param(port_override, int, 0644);
++MODULE_PARM_DESC(port_override, "use this port instead of the slot's reg (read at probe)");
++
+ struct meson_mx_mmc_host {
+ 	struct device			*controller_dev;
+ 
+@@ -530,6 +534,10 @@ static int meson_mx_mmc_add_host(struct meson_mx_mmc_host *host)
+ 		return dev_err_probe(slot_dev, -EINVAL,
+ 				     "missing 'reg' property\n");
+ 
++	/* bring-up aid: find a board's card port without a DT round-trip per guess */
++	if (port_override >= 0)
++		host->slot_id = port_override;
++
+ 	if (host->slot_id >= MESON_MX_SDIO_MAX_SLOTS)
+ 		return dev_err_probe(slot_dev, -EINVAL,
+ 				     "invalid 'reg' property value %d\n",

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- no Exit entry on purpose: on a touch-only tablet it is too easy to hit by accident -->
+<openbox_menu>
+  <menu id="root-menu" label="">
+    <item label="Uygulamalar"><action name="Execute" command="fuzzel"/></item>
+    <item label="Terminal"><action name="Execute" command="foot"/></item>
+    <item label="Web (NetSurf)"><action name="Execute" command="netsurf"/></item>
+    <item label="Metin editoru"><action name="Execute" command="mousepad"/></item>
+    <item label="Dosyalar"><action name="Execute" command="pcmanfm"/></item>
+    <item label="Klavye ac/kapa"><action name="Execute" command="casper-kbd"/></item>
+    <separator/>
+    <item label="Masaustunu yeniden yukle"><action name="Reconfigure"/></item>
+  </menu>
+</openbox_menu>

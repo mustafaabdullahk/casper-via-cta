@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<labwc_config>
+  <core><gap>4</gap></core>
+  <theme><cornerRadius>6</cornerRadius><font><name>DejaVu Sans</name><size>12</size></font></theme>
+  <placement><policy>center</policy></placement>
+  <windowRules><windowRule identifier="foot"><action name="Maximize"/></windowRule></windowRules>
+</labwc_config>

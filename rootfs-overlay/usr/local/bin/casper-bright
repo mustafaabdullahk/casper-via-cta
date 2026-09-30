@@ -1,0 +1,5 @@
+#!/bin/sh
+# casper-bright up|down : step the panel backlight (0..13)
+b=/sys/class/backlight/c1108768.backlight; v=$(cat $b/brightness); m=$(cat $b/max_brightness)
+case "$1" in up) v=$((v+3)); [ $v -gt $m ] && v=$m;; down) v=$((v-3)); [ $v -lt 0 ] && v=0;; esac
+echo $v > $b/brightness

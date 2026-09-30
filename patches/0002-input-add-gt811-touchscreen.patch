@@ -1,0 +1,224 @@
+diff --git a/drivers/input/touchscreen/Kconfig b/drivers/input/touchscreen/Kconfig
+index 9b9ae8ac3..091dcf733 100644
+--- a/drivers/input/touchscreen/Kconfig
++++ b/drivers/input/touchscreen/Kconfig
+@@ -383,6 +383,14 @@ config TOUCHSCREEN_FUJITSU
+ 	  To compile this driver as a module, choose M here: the
+ 	  module will be called fujitsu-ts.
+ 
++config TOUCHSCREEN_GT811
++	tristate "Goodix GT811 I2C touchscreen"
++	depends on I2C
++	select INPUT_MT
++	help
++	  Old Goodix GT811 controller (e.g. Casper Via tablet), whose
++	  register map differs from the GT9xx parts handled by goodix.c.
++
+ config TOUCHSCREEN_GOODIX
+ 	tristate "Goodix I2C touchscreen"
+ 	depends on I2C
+diff --git a/drivers/input/touchscreen/Makefile b/drivers/input/touchscreen/Makefile
+index bfd9de833..d3c50c0c6 100644
+--- a/drivers/input/touchscreen/Makefile
++++ b/drivers/input/touchscreen/Makefile
+@@ -45,6 +45,7 @@ obj-$(CONFIG_TOUCHSCREEN_EGALAX_SERIAL)	+= egalax_ts_serial.o
+ obj-$(CONFIG_TOUCHSCREEN_EXC3000)	+= exc3000.o
+ obj-$(CONFIG_TOUCHSCREEN_FUJITSU)	+= fujitsu_ts.o
+ obj-$(CONFIG_TOUCHSCREEN_GOODIX)	+= goodix_ts.o
++obj-$(CONFIG_TOUCHSCREEN_GT811)	+= gt811.o
+ obj-$(CONFIG_TOUCHSCREEN_GOODIX_BERLIN_CORE)	+= goodix_berlin_core.o
+ obj-$(CONFIG_TOUCHSCREEN_GOODIX_BERLIN_I2C)	+= goodix_berlin_i2c.o
+ obj-$(CONFIG_TOUCHSCREEN_GOODIX_BERLIN_SPI)	+= goodix_berlin_spi.o
+diff --git a/drivers/input/touchscreen/gt811.c b/drivers/input/touchscreen/gt811.c
+new file mode 100644
+index 000000000..90d705e15
+--- /dev/null
++++ b/drivers/input/touchscreen/gt811.c
+@@ -0,0 +1,187 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Goodix GT811 touchscreen (Casper Via CTA-E07-14A).
++ *
++ * The GT811 predates the GT9xx register map that goodix.c speaks: 16-bit
++ * big-endian register addresses, touch data at 0x0721, config at 0x06a2.
++ * Layout reverse-engineered on the stock tablet:
++ *   0x0721: finger bitmask, 0x0722: status, then per finger 5 bytes
++ *           {x_hi, x_lo, y_hi, y_lo, pressure} from 0x0723.
++ * Axes are the panel's own (x 0..600, y 0..1024 on this unit); orientation
++ * comes from the usual touchscreen-* DT properties.
++ */
++
++#include <linux/i2c.h>
++#include <linux/input.h>
++#include <linux/input/mt.h>
++#include <linux/input/touchscreen.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/unaligned.h>
++
++#define GT811_REG_CONFIG	0x06a2
++#define GT811_REG_VERSION	0x0717
++#define GT811_REG_TOUCH		0x0721
++#define GT811_REG_END		0x8000	/* write 0 after a read or the buffer stays frozen */
++
++/*
++ * ponytail: only the first 3 fingers are decoded; that is all the capture
++ * proved. Fingers 3-4 sit past a gap in the map, add them once observed.
++ */
++#define GT811_MAX_FINGERS	3
++#define GT811_TOUCH_LEN		(2 + 5 * GT811_MAX_FINGERS)
++#define GT811_POLL_MS		16
++
++/*
++ * Config from the stock kernel image (matches what the chip reads back, see
++ * backup/regs/gt811-config-0x06a2.txt) except the last byte: 0x01 is an "apply" flag the
++ * chip clears once it has taken the config. Written without it the chip stays in an
++ * unconfigured mode (answers the version register, returns junk at 0x0721).
++ */
++static const u8 gt811_casper_config[106] = {
++	0x12, 0x10, 0x0e, 0x0c, 0x0a, 0x08, 0x06, 0x04, 0x02, 0x00, 0x07, 0x77,
++	0x16, 0x66, 0x26, 0x66, 0x37, 0x67, 0x47, 0x76, 0x57, 0x66, 0x67, 0x76,
++	0x77, 0x77, 0x86, 0x77, 0x97, 0x78, 0xa7, 0x77, 0xb7, 0x77, 0xc7, 0x76,
++	0xd8, 0x88, 0xe9, 0x99, 0xf4, 0x44, 0x07, 0x03, 0x80, 0x80, 0x80, 0x19,
++	0x19, 0x19, 0x0f, 0x0f, 0x0a, 0x50, 0x32, 0x0f, 0x03, 0x00, 0x05, 0x58,
++	0x02, 0x00, 0x04, 0x00, 0x00, 0x38, 0x33, 0x35, 0x30, 0x00, 0x00, 0x26,
++	0x20, 0x02, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x14, 0x10, 0x20, 0x03,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
++};
++
++struct gt811 {
++	struct i2c_client *client;
++	struct input_dev *input;
++	struct touchscreen_properties prop;
++};
++
++static int gt811_read(struct i2c_client *client, u16 reg, u8 *buf, int len)
++{
++	u8 addr[2] = { reg >> 8, reg & 0xff };
++	struct i2c_msg msgs[2] = {
++		{ .addr = client->addr, .len = 2, .buf = addr },
++		{ .addr = client->addr, .flags = I2C_M_RD, .len = len, .buf = buf },
++	};
++	int ret = i2c_transfer(client->adapter, msgs, 2);
++
++	return ret == 2 ? 0 : (ret < 0 ? ret : -EIO);
++}
++
++static int gt811_write(struct i2c_client *client, u16 reg, const u8 *buf, int len)
++{
++	u8 *msg = kmalloc(len + 2, GFP_KERNEL);
++	int ret;
++
++	if (!msg)
++		return -ENOMEM;
++	msg[0] = reg >> 8;
++	msg[1] = reg & 0xff;
++	memcpy(msg + 2, buf, len);
++	ret = i2c_master_send(client, msg, len + 2);
++	kfree(msg);
++	return ret == len + 2 ? 0 : (ret < 0 ? ret : -EIO);
++}
++
++static void gt811_end_cmd(struct i2c_client *client)
++{
++	static const u8 zero;
++
++	gt811_write(client, GT811_REG_END, &zero, 1);
++}
++
++static void gt811_poll(struct input_dev *input)
++{
++	struct gt811 *ts = input_get_drvdata(input);
++	u8 d[GT811_TOUCH_LEN];
++	int i, ret;
++
++	ret = gt811_read(ts->client, GT811_REG_TOUCH, d, sizeof(d));
++	gt811_end_cmd(ts->client);
++	if (ret)
++		return;
++
++	for (i = 0; i < GT811_MAX_FINGERS; i++) {
++		const u8 *p = d + 2 + 5 * i;
++		bool down = d[0] & BIT(i);
++
++		input_mt_slot(input, i);
++		input_mt_report_slot_state(input, MT_TOOL_FINGER, down);
++		if (!down)
++			continue;
++		touchscreen_report_pos(input, &ts->prop, get_unaligned_be16(p),
++				       get_unaligned_be16(p + 2), true);
++		input_report_abs(input, ABS_MT_PRESSURE, p[4]);
++	}
++	input_mt_sync_frame(input);
++	input_sync(input);
++}
++
++static int gt811_probe(struct i2c_client *client)
++{
++	struct device *dev = &client->dev;
++	u8 ver[2];
++	struct gt811 *ts;
++	int ret;
++
++	ts = devm_kzalloc(dev, sizeof(*ts), GFP_KERNEL);
++	if (!ts)
++		return -ENOMEM;
++	ts->client = client;
++
++	ret = gt811_read(client, GT811_REG_VERSION, ver, sizeof(ver));
++	if (ret)
++		return dev_err_probe(dev, ret, "no reply from GT811\n");
++	gt811_end_cmd(client);
++	dev_info(dev, "GT811 version %02x%02x\n", ver[0], ver[1]);
++
++	/* Config lives in RAM and is lost on reset; always (re)apply it. */
++	ret = gt811_write(client, GT811_REG_CONFIG, gt811_casper_config,
++			  sizeof(gt811_casper_config));
++	if (ret)
++		return dev_err_probe(dev, ret, "config write failed\n");
++	gt811_end_cmd(client);
++
++	ts->input = devm_input_allocate_device(dev);
++	if (!ts->input)
++		return -ENOMEM;
++	ts->input->name = "Goodix GT811";
++	ts->input->id.bustype = BUS_I2C;
++	input_set_drvdata(ts->input, ts);
++
++	input_set_abs_params(ts->input, ABS_MT_POSITION_X, 0, 600, 0, 0);
++	input_set_abs_params(ts->input, ABS_MT_POSITION_Y, 0, 1024, 0, 0);
++	input_set_abs_params(ts->input, ABS_MT_PRESSURE, 0, 255, 0, 0);
++	touchscreen_parse_properties(ts->input, true, &ts->prop);
++
++	ret = input_mt_init_slots(ts->input, GT811_MAX_FINGERS,
++				  INPUT_MT_DIRECT | INPUT_MT_DROP_UNUSED);
++	if (ret)
++		return ret;
++
++	/* ponytail: polled; the INT line goes through Meson6 gpio-intc, not wired up yet */
++	ret = input_setup_polling(ts->input, gt811_poll);
++	if (ret)
++		return ret;
++	input_set_poll_interval(ts->input, GT811_POLL_MS);
++
++	return input_register_device(ts->input);
++}
++
++static const struct of_device_id gt811_of_match[] = {
++	{ .compatible = "goodix,gt811" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, gt811_of_match);
++
++static struct i2c_driver gt811_driver = {
++	.probe = gt811_probe,
++	.driver = {
++		.name = "gt811",
++		.of_match_table = gt811_of_match,
++	},
++};
++module_i2c_driver(gt811_driver);
++
++MODULE_DESCRIPTION("Goodix GT811 touchscreen driver");
++MODULE_LICENSE("GPL");

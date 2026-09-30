@@ -1,0 +1,25 @@
+# kernel source: clone it yourself (see README), our changes live in patches/
+/linux/
+/build/
+build.log
+
+# stock firmware dumps from *your* tablet: keep them, do not publish them
+/backup/*.img
+/backup/bad-mtdblock/
+/backup/SHA256SUMS
+/backup/*.txt
+
+# downloaded / generated binaries
+/kernel/busybox
+/kernel/kexec
+/kernel/firmware/
+/ota/*-binary
+/ota/su_bin.h
+/ota/*.zip
+/ota/testkey.*
+/update.zip
+/tools/alpine/
+/tools/kexec-tools*
+/tools/*.log
+/tools/known_hosts
+__pycache__/

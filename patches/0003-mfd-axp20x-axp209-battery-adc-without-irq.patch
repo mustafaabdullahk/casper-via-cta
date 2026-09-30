@@ -1,0 +1,36 @@
+diff --git a/drivers/mfd/axp20x.c b/drivers/mfd/axp20x.c
+index 679364189..14614fc83 100644
+--- a/drivers/mfd/axp20x.c
++++ b/drivers/mfd/axp20x.c
+@@ -960,6 +960,22 @@ static const struct mfd_cell axp192_cells[] = {
+ 	{	.name		= "axp20x-regulator" },
+ };
+ 
++/* AXP209 with its IRQ line unrouted (Meson6 Casper Via): what works by register polling */
++static const struct mfd_cell axp209_cells_no_irq[] = {
++	{
++		.name		= "axp20x-gpio",
++		.of_compatible	= "x-powers,axp209-gpio",
++	}, {
++		.name		= "axp20x-regulator",
++	}, {
++		.name		= "axp20x-adc",
++		.of_compatible	= "x-powers,axp209-adc",
++	}, {
++		.name		= "axp20x-battery-power-supply",
++		.of_compatible	= "x-powers,axp209-battery-power-supply",
++	},
++};
++
+ static const struct mfd_cell axp20x_cells[] = {
+ 	{
+ 		.name		= "axp20x-gpio",
+@@ -1287,6 +1303,8 @@ int axp20x_match_device(struct axp20x_dev *axp20x)
+ 		axp20x->cells = axp20x_cells;
+ 		axp20x->regmap_cfg = &axp20x_regmap_config;
+ 		axp20x->regmap_irq_chip = &axp20x_regmap_irq_chip;
++		nr_cells_no_irq = ARRAY_SIZE(axp209_cells_no_irq);
++		cells_no_irq = axp209_cells_no_irq;
+ 		break;
+ 	case AXP221_ID:
+ 		axp20x->nr_cells = ARRAY_SIZE(axp221_cells);

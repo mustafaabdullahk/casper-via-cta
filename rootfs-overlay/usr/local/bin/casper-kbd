@@ -1,0 +1,4 @@
+#!/bin/sh
+# Toggle the wvkbd on-screen keyboard (SIGUSR2 shows, SIGUSR1 hides).
+f=/run/xdg/kbd-visible
+if [ -e $f ]; then pkill -USR1 wvkbd-mobintl; rm -f $f; else pkill -USR2 wvkbd-mobintl; touch $f; fi

@@ -1,0 +1,211 @@
+// SPDX-License-Identifier: GPL-2.0 OR MIT
+/*
+ * Casper Via CTA-E07-14A tablet (Amlogic AML8726-MX / Meson6, "g34" board).
+ * Values from the stock bootloader env and 3.0.8 dmesg (see backup/).
+ */
+
+/dts-v1/;
+#include "meson6.dtsi"
+
+/ {
+	model = "Casper Via CTA-E07-14A";
+	compatible = "casper,via-cta-e07", "amlogic,meson6";
+
+	aliases {
+		serial0 = &uart_AO;
+	};
+
+	chosen {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+		stdout-path = "serial0:115200n8";
+
+		// bootloader env: fb_addr=0x85100000 display_width=1024 display_height=600 display_bpp=16
+		framebuffer@85100000 {
+			compatible = "simple-framebuffer";
+			reg = <0x85100000 (1024 * 600 * 2)>;
+			width = <1024>;
+			height = <600>;
+			stride = <(1024 * 2)>;
+			format = "r5g6b5";
+		};
+	};
+
+	// ponytail: card VDD shown as an always-on 3.3V rail; its real switch (if any) is unknown
+	vcc_3v3: regulator-3v3 {
+		compatible = "regulator-fixed";
+		regulator-name = "VCC_3V3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-always-on;
+	};
+
+	// LED_PWM_REG2 bits 3:0 (found by sweeping stock aml-bl brightness)
+	backlight@c1108768 {
+		compatible = "amlogic,meson6-led-pwm-backlight";
+		reg = <0xc1108768 0x4>;
+	};
+
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0x80000000 0x40000000>;	/* mem=1024m */
+	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		// ponytail: covers all four stock OSD buffers (0x84100000..) + the u-boot fb
+		display@84000000 {
+			reg = <0x84000000 0x1400000>;
+			no-map;
+		};
+
+		// 1 MiB hole stock 3.0.8 neither uses as RAM nor claims (see /proc/iomem):
+		// survives the trip back to Android, read with ota/memdump
+		ramoops@9ff00000 {
+			compatible = "ramoops";
+			reg = <0x9ff00000 0x100000>;
+			record-size = <0x20000>;
+			console-size = <0x80000>;
+		};
+	};
+};
+
+&uart_AO {
+	status = "okay";
+};
+
+// Bus mapping from stock /proc/iomem: aml-i2c.0 = i2c_A, .1 = i2c_B, .2 = i2c_AO.
+// ponytail: no Meson6 pinctrl yet; /init applies stock pinmux + GPIO state (kernel/pinmux.sh).
+
+&i2c_A {	/* stock adap0: Goodix GT811 @5d, cameras gc0329 @31, gc2035 @3c */
+	clocks = <&clk81>;
+	clock-frequency = <100000>;
+	status = "okay";
+
+	// Raw axes: x = panel short side (0..600), y = long side reversed (0..1024).
+	// Swap + invert both, checked by touching the four corners on mainline.
+	touchscreen@5d {
+		compatible = "goodix,gt811";
+		reg = <0x5d>;
+		touchscreen-size-x = <600>;
+		touchscreen-size-y = <1024>;
+		touchscreen-swapped-x-y;
+		touchscreen-inverted-x;
+		touchscreen-inverted-y;
+	};
+};
+
+&i2c_B {	/* stock adap1: WM8960 @1a, MMA8653 @1d (WHO_AM_I 0x5a); MMA7660 @4c not fitted */
+	clocks = <&clk81>;
+	clock-frequency = <100000>;
+	// Meson8's SPI 128 never fires here and no free SPI latches on stock either
+	// (GIC edge-latch test on stock Android): drop it, patched i2c-meson busy-polls.
+	/delete-property/ interrupts;
+	status = "okay";
+
+	accelerometer@1d {
+		compatible = "fsl,mma8653";
+		reg = <0x1d>;
+	};
+};
+
+&i2c_AO {	/* stock adap2: AXP209 @34 */
+	clocks = <&clk81>;
+	clock-frequency = <100000>;
+	status = "okay";
+
+	// No interrupts yet (line unknown) -> axp20x runs regulator-only.
+	// No regulators node on purpose: core leaves unconstrained rails as they are.
+	pmic: pmic@34 {
+		compatible = "x-powers,axp209";
+		reg = <0x34>;
+
+		// with no IRQ, patched axp20x adds these by polling (patches/0003)
+		axp_adc: adc {
+			compatible = "x-powers,axp209-adc";
+			#io-channel-cells = <1>;
+		};
+
+		battery-power {
+			compatible = "x-powers,axp209-battery-power-supply";
+		};
+	};
+};
+
+// OTG port (stock: dwc_otg_pcd on SPI 30). PHY A lives at 0xc1108400 on Meson6 (meson.dtsi's
+// 0x8800 is Meson8) and needs FSEL=2, not the 5 phy-meson8b-usb2 writes, so /init programs it
+// with stock values. The compatible is deliberately unmatched: /init turns USB clock gates on
+// first, then binds dwc2 via driver_override (touching a gated dwc2 can hang the bus).
+&usb0 {
+	compatible = "casper,dwc2-bind-from-init";
+	/delete-property/ phys;
+	/delete-property/ phy-names;
+	dr_mode = "peripheral";
+	status = "okay";
+};
+
+// SD card slot: port B (u-boot leaves SDIO MULT = 0x80001001 after `mmcinfo`), pins on
+// MUX2 bits 10-15 (0xfc00, applied by /init). Stock Android never touched it.
+&sdio {
+	compatible = "amlogic,meson8-sdio", "amlogic,meson-mx-sdio";
+	clocks = <&clk81>, <&clk81>;
+	clock-names = "core", "clkin";
+	status = "okay";
+
+	sd_card_slot: slot@1 {
+		compatible = "mmc-slot";
+		reg = <1>;
+		// 4-bit reads come back with the same bits flipped every time (MBR 55aa -> 5fab);
+		// u-boot also runs this slot 1-bit (SDIO CONF bit 20 clear). Slow but correct.
+		bus-width = <1>;
+		broken-cd;
+		no-sdio;
+		no-mmc;
+		max-frequency = <25000000>;
+		vmmc-supply = <&vcc_3v3>;
+	};
+};
+
+// Wi-Fi: MediaTek MT7601U (148f:7601) hangs off the second OTG controller in host mode.
+// PHY B (0xc1108420) is programmed by /init like PHY A; power is AO GPIO bit 19 (gpio_state).
+&usb1 {
+	compatible = "casper,dwc2-bind-from-init";
+	/delete-property/ phys;
+	/delete-property/ phy-names;
+	dr_mode = "host";
+	status = "okay";
+};
+
+// SMP: CPU1 waits in the boot ROM on the AHB SRAM mailbox (stock leaves CTRL=0x3,
+// ADDR=its secondary_startup), same layout as Meson8; enable-method in patches/0006.
+/ {
+	cpus {
+		enable-method = "amlogic,meson6-smp";
+	};
+};
+
+&ahb_sram {
+	smp-sram@1ff80 {
+		compatible = "amlogic,meson6-smp-sram";
+		reg = <0x1ff80 0x8>;
+	};
+};
+
+&periph {
+	scu@0 {
+		compatible = "arm,cortex-a9-scu";
+		reg = <0x0 0x100>;
+	};
+
+	// per-CPU tick: the Meson6 timer only interrupts CPU0. No clock given, so
+	// arm_twd calibrates its rate against jiffies.
+	timer@600 {
+		compatible = "arm,cortex-a9-twd-timer";
+		reg = <0x600 0x20>;
+		interrupts = <GIC_PPI 13 (GIC_CPU_MASK_SIMPLE(2) | IRQ_TYPE_EDGE_RISING)>;
+	};
+};

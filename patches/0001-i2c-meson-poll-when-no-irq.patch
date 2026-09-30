@@ -1,0 +1,50 @@
+diff --git a/drivers/i2c/busses/i2c-meson.c b/drivers/i2c/busses/i2c-meson.c
+index 0d9032953..4789dcdd2 100644
+--- a/drivers/i2c/busses/i2c-meson.c
++++ b/drivers/i2c/busses/i2c-meson.c
+@@ -102,6 +102,7 @@ struct meson_i2c {
+ 	int			num_tokens;
+ 
+ 	const struct meson_i2c_data *data;
++	bool			poll;	/* no IRQ wired (Meson6 i2c_B): busy-poll */
+ };
+ 
+ struct meson_i2c_data {
+@@ -433,7 +434,9 @@ static int meson_i2c_xfer_messages(struct i2c_adapter *adap,
+ static int meson_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
+ 			  int num)
+ {
+-	return meson_i2c_xfer_messages(adap, msgs, num, false);
++	struct meson_i2c *i2c = adap->algo_data;
++
++	return meson_i2c_xfer_messages(adap, msgs, num, i2c->poll);
+ }
+ 
+ static int meson_i2c_xfer_atomic(struct i2c_adapter *adap,
+@@ -485,14 +488,19 @@ static int meson_i2c_probe(struct platform_device *pdev)
+ 	if (IS_ERR(i2c->regs))
+ 		return PTR_ERR(i2c->regs);
+ 
+-	irq = platform_get_irq(pdev, 0);
+-	if (irq < 0)
++	irq = platform_get_irq_optional(pdev, 0);
++	if (irq == -ENXIO) {
++		/* atomic path only covers one FIFO (8 byte) chunk per message */
++		dev_info(&pdev->dev, "no IRQ, polling\n");
++		i2c->poll = true;
++	} else if (irq < 0) {
+ 		return irq;
+-
+-	ret = devm_request_irq(&pdev->dev, irq, meson_i2c_irq, 0, NULL, i2c);
+-	if (ret < 0) {
+-		dev_err(&pdev->dev, "can't request IRQ\n");
+-		return ret;
++	} else {
++		ret = devm_request_irq(&pdev->dev, irq, meson_i2c_irq, 0, NULL, i2c);
++		if (ret < 0) {
++			dev_err(&pdev->dev, "can't request IRQ\n");
++			return ret;
++		}
+ 	}
+ 
+ 	ret = clk_prepare_enable(i2c->clk);

@@ -1,0 +1,10 @@
+{
+  "layer": "top", "position": "top", "height": 30,
+  "modules-left": ["wlr/taskbar"],
+  "modules-right": ["backlight", "network", "battery", "clock"],
+  "wlr/taskbar": { "icon-size": 22, "icon-theme": "Papirus", "on-click": "activate", "on-click-middle": "close", "tooltip": false },
+  "backlight": { "device": "c1108768.backlight", "format": "☀ {percent}%", "on-scroll-up": "casper-bright up", "on-scroll-down": "casper-bright down", "on-click": "casper-bright up", "on-click-right": "casper-bright down" },
+  "network": { "interface": "wlan0", "format-wifi": "📶 {essid}", "format-disconnected": "📶 --", "tooltip-format": "{ipaddr}" },
+  "battery": { "bat": "axp20x-battery", "format": "🔋 {capacity}%", "interval": 30 },
+  "clock": { "format": "{:%H:%M}", "tooltip-format": "{:%d.%m.%Y}" }
+}

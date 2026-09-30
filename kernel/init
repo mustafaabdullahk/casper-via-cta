@@ -1,0 +1,110 @@
+#!/bin/busybox sh
+# Bring-up init: stock pinmux/GPIO/rails, touch, then a root shell on the USB serial gadget
+# (/dev/ttyACM0 on the PC, driven by tools/tablet.py). The screen shows a short summary.
+/bin/busybox --install -s /bin
+export PATH=/bin
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mount -t devtmpfs dev /dev 2>/dev/null
+mkdir -p /tmp && mount -t tmpfs tmp /tmp
+# u-boot touched the SD card on the Vol+ path; keep its mux/SDIO state before we overwrite it
+{ for i in $(seq 0 15); do echo "mux$i $(devmem $((0xc11080b0 + 4*i)))"; done
+  for o in 0 4 8 12 16 20 24 28; do echo "sdio+$o $(devmem $((0xc1108c20 + o)))"; done; } > /tmp/uboot-regs.txt
+. /etc/pinmux.sh && pinmux
+
+# AXP209 rail voltages: log what u-boot left, then set stock Android's (match stock dmesg:
+# DCDC2 1.55V, DCDC3 1.2V, LDO2 3.0V, LDO4 3.3V, LDO3 2.55V) before the touch gets power.
+AXP_UBOOT=$(for r in 0x12 0x23 0x27 0x28 0x29; do echo -n "$r=$(i2cget -f -y 2 0x34 $r) "; done)
+i2cset -f -y 2 0x34 0x23 0x22; i2cset -f -y 2 0x34 0x27 0x14
+i2cset -f -y 2 0x34 0x28 0xcf; i2cset -f -y 2 0x34 0x29 0x4a
+GPIO_UBOOT=$(for o in 0x34 0x40 0x4c 0x58 0x64 0x70 0x7c; do devmem $((0xc1108000 + o)); done | tr '\n' ' ')
+gpio_state
+
+# GT811: bank5 bit31 = power (just switched on by gpio_state), bank2 bit3 = reset (active low).
+# After power-up it stays half-alive (answers version, garbage touch data) until reset is
+# pulsed. Sequence verified on stock Android with its touch IRQ masked.
+o=$(devmem 0xc110804c); devmem 0xc110804c 32 $(( o & ~8 )); usleep 20000
+devmem 0xc110804c 32 $(( o | 8 )); usleep 200000
+for i in 1 2 3 4 5; do   # drivers probed before the pinmux above existed
+  usleep 200000
+  echo 0-005d > /sys/bus/i2c/drivers/gt811/bind 2>/dev/null && break
+done
+
+echo 1-001d > /sys/bus/i2c/drivers/mma8452/bind 2>/dev/null   # probed before i2c_B pinmux too
+
+ev=$(grep -l "Goodix GT811" /sys/class/input/event*/device/name 2>/dev/null | head -n 1 | cut -d/ -f5)
+echo
+echo "=== Casper Via: mainline $(uname -r) ==="
+echo "touch: /dev/input/${ev:-YOK}"
+echo "axp uboot: $AXP_UBOOT"
+echo "USB bring-up... (burada donarsa: saat kapisi / dwc2)"
+# USB OTG in peripheral mode. Gates: OR in stock Android's HHI_GCLK_MPEG0..2 (u-boot may
+# leave USB gated). PHY A (0xc1108400): stock CONFIG/CTRL/ADP_BC with a power-on reset.
+GCLK_UBOOT=$(for o in 0x140 0x144 0x148; do devmem $((0xc1104000 + o)); done | tr '\n' ' ')
+set -- 0xb0bf26f1 0x37ecbfe5 0xff804fe7
+for o in 0x140 0x144 0x148; do a=$((0xc1104000 + o)); devmem $a 32 $(( $(devmem $a) | $1 )); shift; done
+echo "gclk uboot: $GCLK_UBOOT"
+P=0xc1108400
+devmem $P 32 0x11
+devmem $((P + 4)) 32 $(( 0x00a90500 | 0x8000 )); usleep 100
+devmem $((P + 4)) 32 0x00a90500; usleep 1000
+devmem $((P + 0xc)) 32 0x9e08
+echo dwc2 > /sys/bus/platform/devices/c9040000.usb/driver_override
+echo c9040000.usb > /sys/bus/platform/drivers/dwc2/bind 2>/dev/null
+# PHY B (0xc1108420) for the host port carrying the MT7601U; stock ADP_BC 0x1118 = host
+P=0xc1108420
+devmem $P 32 0x11
+devmem $((P + 4)) 32 $(( 0x00a90500 | 0x8000 )); usleep 100
+devmem $((P + 4)) 32 0x00a90500; usleep 1000
+devmem $((P + 0xc)) 32 0x1118
+echo dwc2 > /sys/bus/platform/devices/c90c0000.usb/driver_override
+echo c90c0000.usb > /sys/bus/platform/drivers/dwc2/bind 2>/dev/null
+
+echo "usb: $(cat /sys/class/udc/*/state 2>/dev/null || echo 'udc YOK')"
+dmesg | grep -iE "dwc2|gadget|g_serial|udc" | tail -n 6
+sleep 3
+echo "wifi: $(ls /sys/class/net | tr '\n' ' ')  battery: $(cat /sys/class/power_supply/*/capacity 2>/dev/null)%"
+echo "PC'de /dev/ttyACM0 -> tools/tablet.py"
+
+
+# Alpine on the SD card (mmcblk0p1, ext4): network + ssh from its userland, started in a chroot.
+# ponytail: chroot instead of switch_root so the USB shell above stays as a rescue path.
+alpine_up() {
+  i=0; while [ ! -b /dev/mmcblk0p1 ] && [ $i -lt 10 ]; do sleep 1; i=$((i+1)); done
+  mkdir -p /mnt/sd && mount -t ext4 /dev/mmcblk0p1 /mnt/sd || return
+  # first install: tools/mkrootfs.sh tarball copied onto a blank ext4 card
+  if [ -f /mnt/sd/casper-rootfs.tar.gz ]; then
+    echo "SD: rootfs aciliyor (ilk kurulum, birkac dakika)..."
+    tar -xzf /mnt/sd/casper-rootfs.tar.gz -C /mnt/sd && rm /mnt/sd/casper-rootfs.tar.gz && sync
+  fi
+  for f in proc sys dev; do mount --bind /$f /mnt/sd/$f; done
+  mkdir -p /mnt/sd/dev/pts && mount -t devpts -o ptmxmode=0666 devpts /mnt/sd/dev/pts
+  mkdir -p /mnt/sd/dev/shm && mount -t tmpfs -o mode=1777 shm /mnt/sd/dev/shm   # shm_open (labwc keymaps)
+  C="chroot /mnt/sd"
+  if [ -e /mnt/sd/.casper-firstboot ]; then   # install scripts skipped on the PC, run them now
+    $C /sbin/apk fix --no-network >/dev/null 2>&1 && rm /mnt/sd/.casper-firstboot
+  fi
+  ip link set wlan0 up
+  $C /sbin/wpa_supplicant -B -D nl80211 -i wlan0 -c /etc/wpa_supplicant/wpa_supplicant.conf
+  $C /sbin/udhcpc -b -i wlan0 -s /usr/share/udhcpc/default.script >/dev/null 2>&1
+  $C /usr/sbin/ntpd -p pool.ntp.org
+  $C /usr/sbin/dropbear -R
+  hostname -F /mnt/sd/etc/hostname
+  $C /usr/sbin/tlp start >/dev/null 2>&1   # config: /etc/tlp.d/00-casper-via.conf on the SD
+  # touch desktop (labwc, see rootfs-overlay/); lives on the SD, changes need no reflash
+  [ -x /mnt/sd/usr/local/bin/casper-desktop ] && $C /usr/local/bin/casper-desktop >/dev/null 2>&1 &
+  echo "alpine: $(. /mnt/sd/etc/os-release; echo $PRETTY_NAME)"
+  ( sleep 12; echo "wlan0: $(ip -4 addr show wlan0 | grep -o 'inet [0-9.]*') -> ssh root@..." > /dev/console ) &
+}
+alpine_up
+
+# ponytail: plain sh reading lines, no job control; tablet.py frames each command itself
+while :; do
+  if [ -e /dev/ttyGS0 ]; then
+    # Non-interactive read/eval loop: an interactive ash prints "can't access tty" at start,
+    # the PC's still-cooked ttyACM echoes it back, and the stray quote wedges the parser.
+    # stty runs on the loop's own fd because termios resets whenever the tty is reopened.
+    sh -c 'stty -echo; while IFS= read -r l; do eval "$l"; done' </dev/ttyGS0 >/dev/ttyGS0 2>&1
+  fi
+  sleep 1
+done

@@ -1,0 +1,9 @@
+#!/bin/sh
+# Touch desktop for the Casper Via: udev (libinput) + seatd + labwc (pixman, no GPU),
+# with waybar, lavalauncher and wvkbd from ~/.config/labwc/autostart.
+export XDG_RUNTIME_DIR=/run/xdg HOME=/root
+export WLR_RENDERER=pixman WLR_NO_HARDWARE_CURSORS=1 LIBSEAT_BACKEND=seatd
+mkdir -p -m 700 $XDG_RUNTIME_DIR
+pgrep udevd >/dev/null || { udevd --daemon; udevadm trigger; udevadm settle -t 5; }
+pgrep seatd >/dev/null || { seatd -g root >/var/log/seatd.log 2>&1 & sleep 1; }
+exec dbus-run-session labwc >/var/log/labwc.log 2>&1
