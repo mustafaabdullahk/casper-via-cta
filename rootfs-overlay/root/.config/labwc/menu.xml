@@ -7,7 +7,7 @@
     <item label="Web (NetSurf)"><action name="Execute" command="netsurf"/></item>
     <item label="Metin editoru"><action name="Execute" command="mousepad"/></item>
     <item label="Dosyalar"><action name="Execute" command="pcmanfm"/></item>
-    <item label="Klavye ac/kapa"><action name="Execute" command="casper-kbd"/></item>
+    <item label="Klavye ac/kapa"><action name="Execute" command="/usr/local/bin/casper-kbd"/></item>
     <separator/>
     <item label="Masaustunu yeniden yukle"><action name="Reconfigure"/></item>
   </menu>
